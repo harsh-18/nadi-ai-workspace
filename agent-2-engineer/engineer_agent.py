@@ -14,7 +14,9 @@ BAND_API_KEY = os.getenv("BAND_API_KEY")
 BAND_ROOM_ID = os.getenv("BAND_ROOM_ID")
 
 FEATHERLESS_URL = "https://api.featherless.ai/v1/chat/completions"
-FEATHERLESS_MODEL = "mistralai/Mistral-7B-Instruct-v0.2"
+# Centralized model config — change this ONE line to hot-swap models
+# (e.g., switch to Llama) if Mistral gives poor results
+MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.2"
 
 
 # NOTE: Provisional Band SDK endpoint structure.
@@ -27,7 +29,7 @@ BAND_PUBLISH_URL = f"{BAND_BASE_URL}/{BAND_ROOM_ID}/messages"
 # How often (in seconds) we check the Band room for new error reports
 POLL_INTERVAL_SEC = 5
 
-# 
+ 
 def build_prompt(error_report: dict)-> str:
     # .get() prevents crashes if the field is missing from the JSON
     error_type = error_report.get("error_type", "UnknownError")
@@ -72,7 +74,7 @@ def call_featherless(prompt: str)-> str:
 
 
     payload = {
-        "model": FEATHERLESS_MODEL,
+        "model": MODEL_NAME,
         "messages":[
             {
                 "role": "system",
@@ -88,13 +90,17 @@ def call_featherless(prompt: str)-> str:
         "temperature":0.2,# Low temperature = more deterministic, focused patches (less "creative" randomness)
     }
 
-    response = requests.post(FEATHERLESS_URL, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
+    try:
+        response = requests.post(FEATHERLESS_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
 
-    data = response.json()
-    # extract the generated code text from Featherless's response
-    patch_code = data["choices"][0]["message"]["content"].strip()
-    return patch_code
+        data = response.json()
+        # extract the generated code text from Featherless's response
+        patch_code = data["choices"][0]["message"]["content"].strip()
+        return patch_code
+    except Exception as e:
+        print(f"[Featherless API Error] {e}")
+        raise
 
 
 def band_headers() -> dict:
@@ -133,7 +139,7 @@ def publish_patch_to_band(error_report: dict, patch_code: str) -> bool:
     outbound = {
         "type": "engineer_patch",
         "agent": "Agent-2-PatchEngineer",
-        "model_used": FEATHERLESS_MODEL,
+        "model_used": MODEL_NAME,
         "original_error":{
             "error_type": error_report.get("error_type"),
             "error_message": error_report.get("error_message"),
@@ -202,7 +208,7 @@ def main():
     print("=" * 60)
     print("  NADI AI — Agent 2: The Patch Engineer (LIVE MODE)")
     print(f"  Listening on Band Room: {BAND_ROOM_ID}")
-    print(f"  Model: {FEATHERLESS_MODEL}")
+    print(f"  Model: {MODEL_NAME}")
     print("=" * 60)
 
 
@@ -225,8 +231,6 @@ def main():
             if report_id in processed_reports:
                 print("[Skip] Already processed this report. Waiting for a new one. ")
             else:
-                processed_reports.add(report_id)
-
                 print("\n[Step 1/3] Building prompt... ")
                 prompt = build_prompt(error_report)
 
@@ -239,6 +243,7 @@ def main():
                     success = publish_patch_to_band(error_report, patch_code)
 
                     if success:
+                        processed_reports.add(report_id)
                         print("Patch Delivered to Reviewer agent. Waiting for next error ...")
                     else:
                         print("Patch Delivered but failed to publish. Check band SDK credentials")
