@@ -9,21 +9,19 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(base_dir, "agent-1-sentry"))
 sys.path.append(os.path.join(base_dir, "agent-2-engineer"))
 
-# 2. Import Agent Logic
-from sentry_parser import SentryParser
-from engineer_agent import build_prompt, call_featherless
-from reviewer_agent import run_code_evaluation
-
-# 3. Load background configurations
+# 2. Load background configurations and copy Streamlit secrets to environment variables
 load_dotenv()
-
-# Copy Streamlit secrets to environment variables if running in Streamlit Cloud
 for key in ["BAND_API_KEY", "FEATHERLESS_API_KEY", "AI_ML_API_KEY"]:
     try:
         if key in st.secrets:
             os.environ[key] = st.secrets[key]
     except Exception:
         pass
+
+# 3. Import Agent Logic (now safe since environment is fully configured)
+from sentry_parser import SentryParser
+from engineer_agent import build_prompt, call_featherless
+from reviewer_agent import run_code_evaluation
 
 # 4. Configure the browser page settings
 st.set_page_config(
