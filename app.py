@@ -17,6 +17,14 @@ from reviewer_agent import run_code_evaluation
 # 3. Load background configurations
 load_dotenv()
 
+# Copy Streamlit secrets to environment variables if running in Streamlit Cloud
+for key in ["BAND_API_KEY", "FEATHERLESS_API_KEY", "AI_ML_API_KEY"]:
+    try:
+        if key in st.secrets:
+            os.environ[key] = st.secrets[key]
+    except Exception:
+        pass
+
 # 4. Configure the browser page settings
 st.set_page_config(
     page_title="Nadi AI | Diagnostics Command Center",
