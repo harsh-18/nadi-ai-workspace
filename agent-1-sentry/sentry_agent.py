@@ -86,8 +86,8 @@ class SentryParser:
             temperature=0.0  # Greedy decoding for consistent, deterministic parsing
         )
         
-        # Enforce Pydantic parsing matching our schema
-        self.structured_llm = self.llm.with_structured_output(ErrorReport)
+        # Enforce Pydantic parsing matching our schema using json_mode for Featherless compatibility
+        self.structured_llm = self.llm.with_structured_output(ErrorReport, method="json_mode")
 
     def parse_log(self, raw_log: str) -> ErrorReport:
         """Parses a raw crash log into a structured ErrorReport instance."""
@@ -95,11 +95,13 @@ class SentryParser:
             logger.warning("Empty log provided to the Sentry Agent. Generating fallback report.")
             return self._fallback_report("Empty trace log provided.")
 
+        import json
         prompt = ChatPromptTemplate.from_messages([
             ("system", (
                 "You are an automated DevOps diagnostics agent (The Sentry). "
                 "Analyze the provided log trace, isolate the core issue, and extract "
-                "the details matching the requested JSON format exactly."
+                "the details matching the requested JSON format exactly.\n\n"
+                "Desired JSON Schema:\n{schema_json}"
             )),
             ("human", "Here is the raw error log:\n\n{raw_log}"),
         ])
@@ -108,7 +110,8 @@ class SentryParser:
         
         try:
             logger.info("Parsing log trace...")
-            report = chain.invoke({"raw_log": raw_log})
+            schema_json = json.dumps(ErrorReport.model_json_schema())
+            report = chain.invoke({"raw_log": raw_log, "schema_json": schema_json})
             return report
         except Exception as exc:
             logger.error(f"Failed to parse log via LLM: {exc}")

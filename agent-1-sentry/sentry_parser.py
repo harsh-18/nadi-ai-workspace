@@ -77,8 +77,8 @@ class SentryParser:
             model=self.model_name,
             temperature=0.0,
         )
-        # Bind the structured output to our Pydantic model
-        self.structured_llm = self.llm.with_structured_output(ErrorReport)
+        # Bind the structured output to our Pydantic model using json_mode for Featherless compatibility
+        self.structured_llm = self.llm.with_structured_output(ErrorReport, method="json_mode")
 
     def parse_log(self, raw_log: str) -> ErrorReport:
         """Parse *raw_log* and return a validated :class:`ErrorReport`.
@@ -89,19 +89,22 @@ class SentryParser:
             logger.warning("Empty log supplied – returning fallback report")
             return self._fallback_report("Empty log input")
 
+        import json
         prompt = ChatPromptTemplate.from_messages([
             (
                 "system",
                 "You are an automated diagnostics agent (The Sentry). "
                 "Extract the error details from the provided log and output a JSON object "
-                "that matches the ErrorReport schema exactly.",
+                "that matches the ErrorReport schema exactly.\n\n"
+                "Desired JSON Schema:\n{schema_json}",
             ),
             ("human", "Log input:\n\n{raw_log}"),
         ])
         chain = prompt | self.structured_llm
         try:
             logger.info("Invoking LLM for log analysis")
-            report = chain.invoke({"raw_log": raw_log})
+            schema_json = json.dumps(ErrorReport.model_json_schema())
+            report = chain.invoke({"raw_log": raw_log, "schema_json": schema_json})
             logger.info("LLM parsing succeeded")
             return report
         except Exception as exc:  # pragma: no cover

@@ -5,10 +5,9 @@ from crewai import Agent, Task, Crew, Process, LLM
 # 1. Load the hidden environment variables
 load_dotenv()
 
-# 2. Redirect standard LLM traffic to the AI/ML API
-# Note: AI/ML API uses the standard OpenAI wrapper format for easy integration
-os.environ["OPENAI_API_KEY"] = os.getenv("AI_ML_API_KEY")
-os.environ["OPENAI_API_BASE"] = "https://api.aimlapi.com/v1"
+# 2. Redirect standard LLM traffic to the AI/ML API (commented out to avoid global side-effects on import)
+# os.environ["OPENAI_API_KEY"] = os.getenv("AI_ML_API_KEY")
+# os.environ["OPENAI_API_BASE"] = "https://api.aimlapi.com/v1"
 
 # Instantiate a powerful open-source reasoning model via the API
 reviewer_llm = LLM(
