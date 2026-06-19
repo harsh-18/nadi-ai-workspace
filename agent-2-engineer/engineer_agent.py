@@ -60,6 +60,39 @@ Begin the patch now:"""
     return prompt
 
 
+def build_refactor_prompt(error_report: dict, previous_patch: str, reviewer_feedback: str) -> str:
+    # Get parameters from error report
+    error_type = error_report.get("error_type", "UnknownError")
+    error_message = error_report.get("error_message", "No message provided")
+    file_path = error_report.get("file_path", "unknown file")
+    line_number = error_report.get("line_number", "?")
+    language = error_report.get("language", "Python")
+
+    prompt = f"""You are an expert {language} backend engineer.
+A production server crashed with this error:
+ 
+ERROR TYPE    : {error_type}
+ERROR MESSAGE : {error_message}
+FILE          : {file_path}  (line {line_number})
+
+You previously generated this patch to resolve the issue:
+```python
+{previous_patch}
+```
+
+However, the Senior Code Reviewer rejected it with the following critique/feedback:
+{reviewer_feedback}
+
+YOUR TASK:
+1. Analyze the reviewer's feedback and the previous patch.
+2. Write a corrected, minimal, production-safe {language} code patch that resolves the original issue and addresses all feedback.
+3. Include a brief comment above the fix explaining what you changed and why.
+4. Return ONLY the corrected code block — no markdown, no explanations outside the code.
+
+Begin the refactored patch now:"""
+    
+    return prompt
+
 
 def call_featherless(prompt: str)-> str:
     if not FEATHERLESS_API_KEY:

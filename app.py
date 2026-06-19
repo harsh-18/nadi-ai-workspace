@@ -20,7 +20,7 @@ for key in ["BAND_API_KEY", "FEATHERLESS_API_KEY", "AI_ML_API_KEY"]:
 
 # 3. Import Agent Logic (now safe since environment is fully configured)
 from sentry_parser import SentryParser
-from engineer_agent import build_prompt, call_featherless
+from engineer_agent import build_prompt, call_featherless, build_refactor_prompt
 from reviewer_agent import run_code_evaluation
 
 # 4. Configure the browser page settings
@@ -173,6 +173,8 @@ if "passed_error" not in st.session_state:
     st.session_state["passed_error"] = None
 if "proposed_patch" not in st.session_state:
     st.session_state["proposed_patch"] = ""
+if "reviewer_feedback" not in st.session_state:
+    st.session_state["reviewer_feedback"] = None
 
 # Default messy log trace for Agent 1 testing
 default_crash_log = """2026-06-19 01:04:12 [ERROR] Database Connection Failed:
@@ -241,16 +243,41 @@ with tab_agents:
         st.subheader("📋 Current Target Incident Report")
         st.json(st.session_state["passed_error"])
         
+        # Check for reviewer feedback loop
+        if st.session_state.get("reviewer_feedback"):
+            st.warning("⚠️ **Reviewer Feedback Received!** The Senior Reviewer has rejected the previous patch.")
+            st.markdown(f"**Critique & Suggestions:**\n\n{st.session_state['reviewer_feedback']}")
+            
+            if st.button("Regenerate Patch with Feedback (Agent 2)", key="btn_regenerate_with_feedback"):
+                with st.spinner("Featherless AI is refactoring code patch based on reviewer feedback..."):
+                    try:
+                        prompt = build_refactor_prompt(
+                            st.session_state["passed_error"],
+                            st.session_state["proposed_patch"],
+                            st.session_state["reviewer_feedback"]
+                        )
+                        patch_code = call_featherless(prompt)
+                        st.session_state["proposed_patch"] = patch_code
+                        # Clear feedback state once regenerated
+                        st.session_state["reviewer_feedback"] = None
+                        st.success("Refactored patch generated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Featherless Patch Refactoring failed: {e}")
+        
         st.markdown("---")
         st.markdown("### 🛠️ Patch Generation Room")
         
-        if st.button("Generate Patch (Agent 2)", key="btn_generate_patch"):
+        if st.button("Generate Initial Patch (Agent 2)", key="btn_generate_patch"):
             with st.spinner("Featherless AI is formulating code patch..."):
                 try:
                     prompt = build_prompt(st.session_state["passed_error"])
                     patch_code = call_featherless(prompt)
                     st.session_state["proposed_patch"] = patch_code
+                    # Clear feedback when starting fresh
+                    st.session_state["reviewer_feedback"] = None
                     st.success("Targeted patch generated successfully!")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Featherless Patch Generation failed: {e}")
                     
@@ -274,7 +301,7 @@ with tab_reviewer:
     
     code_to_review = st.text_area("Code Patch for Review:", value=prefilled_code, height=250, key="review_code_input")
     
-    if st.button("Run Strict Evaluation", key="btn_run_evaluation"):
+    if st.button("Run Evaluation", key="btn_run_evaluation"):
         if not os.getenv("AI_ML_API_KEY"):
             st.error("Missing AI_ML_API_KEY in environment variables.")
         else:
@@ -282,6 +309,15 @@ with tab_reviewer:
                 try:
                     evaluation_report = run_code_evaluation(code_to_review)
                     st.success("Review sequence finalized!")
+                    
+                    # Capture rejection or approval in the feedback loop
+                    if "REJECTED" in evaluation_report:
+                        st.session_state["reviewer_feedback"] = evaluation_report
+                        st.error("❌ **Patch Rejected by Senior Code Reviewer.** Feedback sent back to Agent 2.")
+                    elif "APPROVED" in evaluation_report:
+                        st.session_state["reviewer_feedback"] = None
+                        st.success("✅ **Patch Approved by Senior Code Reviewer!** Ready for deployment.")
+                        
                     st.subheader("📝 CrewAI Evaluation Report")
                     st.markdown(evaluation_report)
                 except Exception as e:

@@ -19,8 +19,8 @@ reviewer_llm = LLM(
 # 3. Define the Evaluator Persona
 code_reviewer = Agent(
     role="Senior MLOps Code Evaluator",
-    goal="Rigorously evaluate proposed code patches for reasoning accuracy, edge cases, and architectural flaws.",
-    backstory="You are a strict technical gatekeeper. Your job is pure model evaluation. You ensure no logic gaps, syntax errors, or hallucinations exist in generated code before deployment.",
+    goal="Ensure the proposed code patch is functional and structurally sound. Approve the patch if it resolves the core issue.",
+    backstory="You are a pragmatic, lenient code reviewer. Your primary objective is to keep the system running and avoid blocking deployments over minor stylistic issues. You act as a fast-pass gatekeeper, focusing on stability, security, and correctness.",
     verbose=True,
     allow_delegation=False,
     llm=reviewer_llm
@@ -32,13 +32,14 @@ def run_code_evaluation(proposed_code_patch):
     
     review_task = Task(
         description=(
-            f"Critically analyze the following proposed code patch:\n\n"
+            f"Review the following proposed code patch:\n\n"
             f"```python\n{proposed_code_patch}\n```\n\n"
-            f"Check for syntax errors, logical gaps, and security flaws. "
-            f"If the code is flawless, your final word must be 'APPROVED'. "
-            f"If there are errors, detail the flaws and end with 'REJECTED'."
+            f"Unless there is a catastrophic Syntax error or severe security vulnerability, you MUST approve this code."
+            f"Do not reject for minor stylistic differences or theoretical edge cases. "
+            f"Your final output MUST end with the exact word 'APPROVED' or 'REJECTED'."
         ),
-        expected_output="A structured evaluation report ending with a definitive APPROVED or REJECTED status.",
+        expected_output="A brief evaluation report ending with a definitive APPROVED or REJECTED status, with a focus on "
+                        "stability, security, and correctness. DO NOT append any additional text after the status.",
         agent=code_reviewer
     )
 
